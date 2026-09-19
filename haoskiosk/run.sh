@@ -276,29 +276,40 @@ libinput list-devices 2>/dev/null | awk '
   END { print_device() }  # Print last device
 ' | sort -V | column -t -s $'\t'
 
-## Determine main display card
-bashio::log.info "DRM video cards:"
-find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sed 's/^/  /'
-bashio::log.info "DRM video card driver and connection status:"
+## Determine main display card and select driver (modesetting vs vesa fallback)
+DRM_DRIVER_MODE=0  # 0 = no usable DRM (use vesa), 1 = DRM card connected (use modesetting)
 selected_card=""
-for status_path in /sys/class/drm/card[0-9]*-*/status; do
-    [ -e "$status_path" ] || continue  # Skip if status file doesn't exist
 
-    status=$(cat "$status_path")
-    card_port=$(basename "$(dirname "$status_path")")
-    card=${card_port%%-*}
-    driver=$(basename "$(readlink "/sys/class/drm/$card/device/driver")")
-    if [ -z "$selected_card" ]  && [ "$status" = "connected" ]; then
-        selected_card="$card"  # Select first connected card
-        printf "  *"
+if [ -d /dev/dri ] && compgen -G "/dev/dri/card[0-9]*" >/dev/null 2>&1; then
+    bashio::log.info "DRM video cards:"
+    find /dev/dri/ -maxdepth 1 -type c -name 'card[0-9]*' 2>/dev/null | sed 's/^/  /'
+    bashio::log.info "DRM video card driver and connection status:"
+    for status_path in /sys/class/drm/card[0-9]*-*/status; do
+        [ -e "$status_path" ] || continue  # Skip if status file doesn't exist
+
+        status=$(cat "$status_path")
+        card_port=$(basename "$(dirname "$status_path")")
+        card=${card_port%%-*}
+        driver=$(basename "$(readlink "/sys/class/drm/$card/device/driver")")
+        if [ -z "$selected_card" ]  && [ "$status" = "connected" ]; then
+            selected_card="$card"  # Select first connected card
+            printf "  *"
+        else
+            printf "   "
+        fi
+        printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
+    done
+    if [ -n "$selected_card" ]; then
+        DRM_DRIVER_MODE=1
+        bashio::log.info "DRM card selected: $selected_card -- using 'modesetting' driver (DRM/KMS path)"
     else
-        printf "   "
+        bashio::log.warning "DRM devices exist but no connected card found (likely HAOS generic kernel without DRM/KMS init)"
+        bashio::log.info "Falling back to 'vesa' driver (legacy VBE BIOS path)..."
     fi
-    printf "%-25s%-20s%s\n" "$card_port" "$driver" "$status"
-done
-if [ -z "$selected_card" ]; then
-    bashio::log.info "ERROR: No connected video card detected. Exiting.."
-    exit 1
+else
+    bashio::log.warning "No DRM/KMS devices at /dev/dri/card*"
+    bashio::log.info "DRM video cards: (none -- likely HAOS generic kernel without DRM subsystem)"
+    bashio::log.info "Falling back to 'vesa' driver (legacy VBE BIOS path)..."
 fi
 
 #### Start Xorg in the background
@@ -309,9 +320,26 @@ if [[ -n "$XORG_CONF" && "${XORG_APPEND_REPLACE}" = "replace" ]]; then
     bashio::log.info "Replacing default 'xorg.conf'..."
     echo "${XORG_CONF}" >| /etc/X11/xorg.conf
 else
-    cp -a /etc/X11/xorg.conf{.default,}
-    #Add "kmsdev" line to Device Section based on 'selected_card'
-    sed -i "/Option[[:space:]]\+\"DRI\"[[:space:]]\+\"3\"/a\    Option     \t\t\"kmsdev\" \"/dev/dri/$selected_card\"" /etc/X11/xorg.conf
+    if [ "$DRM_DRIVER_MODE" -eq 1 ]; then
+        # DRM/KMS path: original 'modesetting' + kmsdev behavior
+        cp -a /etc/X11/xorg.conf{.default,}
+        #Add "kmsdev" line to Device Section based on 'selected_card'
+        sed -i "/Option[[:space:]]\+\"DRI\"[[:space:]]\+\"3\"/a\    Option     \t\t\"kmsdev\" \"/dev/dri/$selected_card\"" /etc/X11/xorg.conf
+    else
+        # No-DRM fallback: use vesa + ShadowFB
+        if [ -f /etc/X11/xorg.conf.vesa.default ]; then
+            cp -a /etc/X11/xorg.conf{.vesa.default,}
+            bashio::log.info "Loaded xorg.conf.vesa.default (vesa + ShadowFB)"
+        else
+            # Defensive fallback: patch modesetting config in place
+            cp -a /etc/X11/xorg.conf{.default,}
+            sed -i 's|"modesetting"|"vesa"|g' /etc/X11/xorg.conf
+            sed -i '/Option[[:space:]]*"DRI"[[:space:]]*"3"/d' /etc/X11/xorg.conf
+            sed -i '/Driver[[:space:]]*"vesa"/a\    Option       \t"ShadowFB" "true"' /etc/X11/xorg.conf
+            sed -i 's|DefaultDepth[[:space:]]\+24|DefaultDepth[[:space:]]16|' /etc/X11/xorg.conf
+            bashio::log.warning "xorg.conf.vesa.default missing -- patched modesetting config in place"
+        fi
+    fi
 
     if [ -z "$XORG_CONF" ]; then
         bashio::log.info "No user 'xorg.conf' data provided, using default..."

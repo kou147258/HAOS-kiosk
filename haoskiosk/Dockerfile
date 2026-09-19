@@ -18,6 +18,7 @@ RUN apk update && apk add --no-cache \
 ## Xserver and graphics
      xorg-server \
      xf86-video-modesetting \
+     xf86-video-vesa \
      mesa-dri-gallium \
      mesa-egl \
      mesa-gles \
@@ -74,6 +75,7 @@ ENV DISPLAY=:0
 
 ##### Copy over 'xorg.conf.default' and lua 'userconf.lua' file
 COPY xorg.conf.default /etc/X11/
+COPY xorg.conf.vesa.default /etc/X11/
 COPY userconf.lua /root/.config/luakit/
 COPY translations/*.yaml /translations/
 
