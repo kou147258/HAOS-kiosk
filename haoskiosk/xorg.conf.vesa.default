@@ -25,6 +25,11 @@ EndSection
 Section "Device"
     Identifier		"Card0"
     Driver      	"vesa"
+    # /dev/fb0 (efifb) is always present on HAOS generic kernel even though
+    # its mmap fails with EINVAL inside containers. vesa driver has a hard
+    # refusal: "Refusing to run, Framebuffer or dri device present" if any
+    # fbdev or dri node exists. IgnoreFramebuffer bypasses that check.
+    Option      	"IgnoreFramebuffer" "true"
     # ShadowFB puts Xorg pixmap storage in main memory instead of
     # touching /dev/fb0 (efifb iomem mmap returns EINVAL inside
     # containers on HAOS generic kernel).

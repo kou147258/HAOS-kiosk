@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.3.3-fork2 - September 2026
+
+- Fix vesa fallback: add `Option "IgnoreFramebuffer" "true"` to bypass
+  vesa driver's hard refusal when /dev/fb0 (efifb) is present.
+- Fix `xf86EnableIO: failed to enable I/O ports access` by adding
+  `SYS_RAWIO` to `privileged:` -- VESA's INT10 BIOS calls need ioperm(),
+  which is gated by CAP_SYS_RAWIO (not included in CAP_SYS_ADMIN).
+- Same vesa + ShadowFB fallback behaviour as 1.3.3-fork1.
+
+## v1.3.3-fork1 - September 2026
+
+- Add vesa + ShadowFB fallback path for HAOS generic kernel systems
+  where /dev/dri/card* is empty (no DRM/KMS) and a legacy VGA panel
+  is the only display. Original modesetting path is preserved when
+  a connected DRM card is detected.
+
 ## v1.3.2 - April 2026
 
 - Added explicit BUILD_FROM location to Dockerfile for ha core 2026.04+

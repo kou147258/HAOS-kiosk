@@ -2,7 +2,7 @@
 
 Display HA dashboards in kiosk mode directly on your HAOS server.
 
-## Author: Jeff Kosowsky (version: 1.3.2, April 2026)
+## Author: Jeff Kosowsky (upstream: 1.3.2, April 2026) -- this fork: 1.3.3-fork2 (Sept 2026, vesa + ShadowFB fallback for legacy VGA / no-DRM systems)
 
 ## Description
 
