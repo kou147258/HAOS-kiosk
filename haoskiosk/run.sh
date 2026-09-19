@@ -326,7 +326,7 @@ else
         #Add "kmsdev" line to Device Section based on 'selected_card'
         sed -i "/Option[[:space:]]\+\"DRI\"[[:space:]]\+\"3\"/a\    Option     \t\t\"kmsdev\" \"/dev/dri/$selected_card\"" /etc/X11/xorg.conf
     else
-        # No-DRM fallback: use vesa + ShadowFB
+        # No-DRM fallback: use vesa + ShadowFB + IgnoreFramebuffer
         if [ -f /etc/X11/xorg.conf.vesa.default ]; then
             cp -a /etc/X11/xorg.conf{.vesa.default,}
             bashio::log.info "Loaded xorg.conf.vesa.default (vesa + ShadowFB)"
@@ -338,6 +338,30 @@ else
             sed -i '/Driver[[:space:]]*"vesa"/a\    Option       \t"ShadowFB" "true"' /etc/X11/xorg.conf
             sed -i 's|DefaultDepth[[:space:]]\+24|DefaultDepth[[:space:]]16|' /etc/X11/xorg.conf
             bashio::log.warning "xorg.conf.vesa.default missing -- patched modesetting config in place"
+        fi
+
+        # Belt-and-suspenders #1: force IgnoreFramebuffer into the Device section
+        # regardless of which config file we loaded. Some xf86-video-vesa builds
+        # ignore the option name, but most honour it.
+        if grep -q 'Driver[[:space:]]*"vesa"' /etc/X11/xorg.conf \
+                && ! grep -q 'IgnoreFramebuffer' /etc/X11/xorg.conf; then
+            bashio::log.info "Patching xorg.conf: adding Option IgnoreFramebuffer true"
+            sed -i '/Driver[[:space:]]*"vesa"/a\    Option       \t"IgnoreFramebuffer" "true"' /etc/X11/xorg.conf
+        fi
+    fi
+
+    # Belt-and-suspenders #2: remove /dev/fb0 inside the container before
+    # Xorg starts. vesa driver's VESAPreInit does `access("/dev/fb0", F_OK)`
+    # and refuses if the node exists, regardless of IgnoreFramebuffer (some
+    # xf86-video-vesa versions don't honour the option, and efifb always
+    # creates the node on HAOS generic kernel even though mmap fails).
+    # /dev in HA Supervisor add-on containers is a tmpfs, so rm works.
+    if [ "$DRM_DRIVER_MODE" -eq 0 ] && [ -e /dev/fb0 ]; then
+        bashio::log.info "Removing /dev/fb0 to bypass vesa fbdev pre-init check..."
+        if rm -f /dev/fb0; then
+            bashio::log.info "/dev/fb0 removed successfully"
+        else
+            bashio::log.warning "Failed to rm /dev/fb0 -- vesa may still refuse"
         fi
     fi
 

@@ -4,7 +4,7 @@ description: |
   Start X server and browser on local HAOS server and display dashboards in
   kiosk mode (Jeff Kosowsky) -- fork with vesa + ShadowFB fallback for legacy
   VGA / no-DRM systems (HAOS generic kernel)
-version: "1.3.3-fork2"
+version: "1.3.3-fork3"
 slug: "haoskiosk"
 url: https://github.com/puterboy/HAOS-kiosk/tree/main/haoskiosk
 

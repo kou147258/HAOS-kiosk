@@ -1,5 +1,21 @@
 # Changelog
 
+## v1.3.3-fork3 - September 2026
+
+- Belt-and-suspenders fix for vesa "Refusing to run, Framebuffer or dri
+  device present" that some users still hit with fork2:
+    1. run.sh now ALWAYS ensures `Option "IgnoreFramebuffer" "true"` is
+       in the vesa Device section, regardless of whether
+       xorg.conf.vesa.default was loaded or the in-place sed fallback
+       was used. (Some xf86-video-vesa builds ignore the option or the
+       cached image didn't include it.)
+    2. run.sh removes `/dev/fb0` inside the container before Xorg
+       starts. vesa's pre-init does `access("/dev/fb0", F_OK)` and
+       refuses on the node's mere existence; /dev in HA Supervisor
+       add-on containers is a tmpfs so rm works. This bypasses the
+       check at the file-system level, not via the driver option.
+- Same DRM/modesetting path as fork1/fork2.
+
 ## v1.3.3-fork2 - September 2026
 
 - Fix vesa fallback: add `Option "IgnoreFramebuffer" "true"` to bypass
